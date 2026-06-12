@@ -1876,6 +1876,38 @@ describe("unit tests", () => {
       await expect(sharedExport).resolves.toEqual(file);
     });
   });
+
+  describe("deleteDatabase", () => {
+    test("requests database deletion and disposes after completion", async () => {
+      await using setup = await setupRunWithEvoluDeps();
+      const { run, evoluInputs, postEvoluOutput } = setup;
+      let onDatabaseDeletedCount = 0;
+      const evolu = await run.orThrow(
+        createEvolu(Schema, {
+          appName: testAppName,
+          appOwner: testAppOwner,
+          transports: [],
+          onDatabaseDeleted: () => {
+            onDatabaseDeletedCount += 1;
+          },
+        }),
+      );
+
+      evolu.deleteDatabase();
+
+      await testWaitForWorkerMessage();
+
+      expect(evoluInputs).toEqual([{ type: "DeleteDatabase" }]);
+
+      postEvoluOutput({ type: "OnDatabaseDeleted" });
+      await testWaitForWorkerMessage();
+
+      expect(onDatabaseDeletedCount).toBe(1);
+      expect(() => evolu.deleteDatabase()).toThrow(
+        "Cannot use a disposed object.",
+      );
+    });
+  });
 });
 
 describe("integration tests", () => {

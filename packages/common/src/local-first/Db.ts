@@ -291,6 +291,16 @@ export const startDbWorker =
               });
               break;
 
+            case "DeleteDatabase":
+              dbDeps.sqlite.deleteDatabase();
+              postQueuedResponse({
+                type: "ForEvolu",
+                id: request.id,
+                message: { type: "DeleteDatabase" },
+              });
+              void disposables.disposeAsync();
+              break;
+
             default:
               exhaustiveCheck(request.message);
           }

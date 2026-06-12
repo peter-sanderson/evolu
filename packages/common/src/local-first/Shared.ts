@@ -129,6 +129,9 @@ export type EvoluInput =
     }
   | {
       readonly type: "Export";
+    }
+  | {
+      readonly type: "DeleteDatabase";
     };
 
 export type EvoluOutput =
@@ -143,6 +146,9 @@ export type EvoluOutput =
   | {
       readonly type: "OnExport";
       readonly file: Uint8Array<ArrayBuffer>;
+    }
+  | {
+      readonly type: "OnDatabaseDeleted";
     };
 
 export type DbWorkerInput =
@@ -156,7 +162,10 @@ export type DbWorkerRequest =
   | {
       readonly type: "ForEvolu";
       readonly id: EvoluInstanceId;
-      readonly message: ExtractType<EvoluInput, "Mutate" | "Query" | "Export">;
+      readonly message: ExtractType<
+        EvoluInput,
+        "Mutate" | "Query" | "Export" | "DeleteDatabase"
+      >;
     }
   | {
       readonly type: "ForSharedWorker";
@@ -203,6 +212,9 @@ export type DbWorkerQueuedResponse =
         | {
             readonly type: "Export";
             readonly file: Uint8Array<ArrayBuffer>;
+          }
+        | {
+            readonly type: "DeleteDatabase";
           };
     }
   | {
@@ -538,9 +550,15 @@ const createEvoluTenant =
       ),
     );
     let queueRequestInFlight = false;
+    let databaseDeleted = false;
 
     const runQueue = (): void => {
-      if (queueRequestInFlight || !isNonEmptyArray(queue) || !dbWorkerPort) {
+      if (
+        databaseDeleted ||
+        queueRequestInFlight ||
+        !isNonEmptyArray(queue) ||
+        !dbWorkerPort
+      ) {
         return;
       }
 
@@ -664,6 +682,13 @@ const createEvoluTenant =
             { type: "OnExport", file: response.message.file },
             [response.message.file.buffer],
           );
+          break;
+
+        case "DeleteDatabase":
+          databaseDeleted = true;
+          for (const instance of instancesById.values()) {
+            instance.port.postMessage({ type: "OnDatabaseDeleted" });
+          }
           break;
       }
     };
@@ -830,6 +855,7 @@ const createEvoluTenant =
         instance.port.onMessage = (message) => {
           switch (message.type) {
             case "Query":
+            case "DeleteDatabase":
             case "Export": {
               queue.push({ type: "ForEvolu", id: instance.id, message });
               runQueue();

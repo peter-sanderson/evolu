@@ -600,6 +600,62 @@ describe("worker startup", () => {
       { mode: "encrypted", encryptionKey: testAppOwner.encryptionKey },
     ]);
   });
+
+  test("delete database request deletes SQLite database", async () => {
+    await using dbSetup = await setupDb();
+    let deleted = false;
+    const spiedDbSetup: DbSetup = {
+      ...dbSetup,
+      createSqliteDriver: (name, options) => {
+        const task = dbSetup.createSqliteDriver(name, options);
+        return async (run) => {
+          const result = await task(run);
+          if (!result.ok) return result;
+          const driver = result.value;
+          return ok({
+            exec: driver.exec,
+            export: driver.export,
+            deleteDatabase: () => {
+              deleted = true;
+              driver.deleteDatabase();
+            },
+            [Symbol.dispose]: () => driver[Symbol.dispose](),
+          });
+        };
+      },
+    };
+    await using setup = await setupDbWorker({ dbSetup: spiedDbSetup });
+    const callbackId = setup.createId();
+
+    const outputs = await postRequest(
+      setup,
+      {
+        type: "ForEvolu",
+        id: setup.evoluInstanceId,
+        message: { type: "DeleteDatabase" },
+      },
+      callbackId,
+    );
+
+    expect(deleted).toBe(true);
+    expect(outputs).toEqual([
+      {
+        type: "OnQueuedResponse",
+        callbackId,
+        response: {
+          type: "ForEvolu",
+          id: setup.evoluInstanceId,
+          message: { type: "DeleteDatabase" },
+        },
+      },
+    ]);
+
+    const run = testCreateRun({
+      lockManager: setup.lockManager,
+    });
+    await using lock = await run.orThrow(acquireLeaderLock(setup.workerName));
+    expect(lock).toBeDefined();
+  });
 });
 
 describe("query and mutation flow", () => {

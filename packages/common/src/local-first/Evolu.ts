@@ -868,6 +868,12 @@ export const createEvolu =
             break;
           }
 
+          case "OnDatabaseDeleted": {
+            config.onDatabaseDeleted?.();
+            void disposables.disposeAsync();
+            break;
+          }
+
           default:
             exhaustiveCheck(message);
         }
@@ -1062,7 +1068,7 @@ export const createEvolu =
 
       deleteDatabase: () => {
         assertNotDisposed(disposables);
-        todo();
+        postMessage({ type: "DeleteDatabase" });
       },
 
       deleteOwner: (owner) => {

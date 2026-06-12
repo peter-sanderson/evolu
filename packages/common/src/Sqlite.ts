@@ -60,6 +60,9 @@ export interface Sqlite extends AsyncDisposable {
    * lists, which require transferable `ArrayBuffer` backing.
    */
   readonly export: () => Uint8Array<ArrayBuffer>;
+
+  /** Disposes this database, then deletes its persistent database file. */
+  readonly deleteDatabase: () => void;
 }
 
 export interface SqliteDep {
@@ -302,6 +305,12 @@ export const createSqlite =
       export: () => {
         assertNotDisposed(disposables);
         return driver.export();
+      },
+
+      deleteDatabase: () => {
+        assertNotDisposed(disposables);
+        driver.deleteDatabase();
+        void disposables.disposeAsync();
       },
 
       [Symbol.asyncDispose]: () => disposables.disposeAsync(),

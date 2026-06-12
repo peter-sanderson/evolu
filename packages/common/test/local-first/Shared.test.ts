@@ -713,6 +713,42 @@ describe("with one evolu instance", () => {
       expect(Array.from(output.file)).toEqual([1, 2, 3]);
     });
 
+    test("queues delete database request for DbWorker and notifies instances", async () => {
+      await using setup = await setupSharedWorker();
+      const { createEvolu, run } = setup;
+      const { time } = run.deps;
+      const { dbInputs, dbWorkerPort, evoluChannel, id } = await createEvolu();
+      const outputs: Array<EvoluOutput> = [];
+      evoluChannel.port2.onMessage = (output) => {
+        outputs.push(output);
+      };
+
+      evoluChannel.port2.postMessage({ type: "DeleteDatabase" });
+      time.advance("10s");
+      await testWaitForWorkerMessage();
+
+      const deleteInput = dbInputs.at(-1);
+      assert(deleteInput, "Expected delete database input");
+      expect(deleteInput.request).toEqual({
+        type: "ForEvolu",
+        id,
+        message: { type: "DeleteDatabase" },
+      });
+
+      dbWorkerPort.postMessage({
+        type: "OnQueuedResponse",
+        callbackId: deleteInput.callbackId,
+        response: {
+          type: "ForEvolu",
+          id,
+          message: { type: "DeleteDatabase" },
+        },
+      });
+      await testWaitForWorkerMessage();
+
+      expect(outputs).toEqual([{ type: "OnDatabaseDeleted" }]);
+    });
+
     test("ignores queued evolu responses for missing instances", async () => {
       await using setup = await setupSharedWorker();
       const { createEvolu, run } = setup;

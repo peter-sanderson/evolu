@@ -357,6 +357,31 @@ describe("export", () => {
   });
 });
 
+describe("deleteDatabase", () => {
+  test("deleteDatabase delegates to driver", async () => {
+    let deleted = false;
+
+    await using setup = await testSetupSqlite({
+      createSqliteDriver: () => () =>
+        ok({
+          exec: () => ({ rows: [], changes: 0 }),
+          export: () => new Uint8Array(),
+          deleteDatabase: () => {
+            deleted = true;
+          },
+          [Symbol.dispose]: lazyVoid,
+        }),
+    });
+
+    setup.sqlite.deleteDatabase();
+
+    expect(deleted).toBe(true);
+    expect(() => setup.sqlite.exec(sql`select 1;`)).toThrow(
+      "Cannot use a disposed object.",
+    );
+  });
+});
+
 test("logQueryExecutionTime logs timing", async () => {
   await using setup = await setupSqlite();
   const { run, sqlite } = setup;
